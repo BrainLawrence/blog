@@ -62,7 +62,6 @@ npx vitepress init
 .vitepress/dist
 .vitepress/cache
 node_modules
-package-lock.json
 ```
 
 接下来我们看下效果，打开 `pacage.json` 文件，点击如下选项：
@@ -88,6 +87,126 @@ npm run docs:dev
 我们访问这个地址：`http://localhost:5173/`，出现如下页面表示项目本地搭建成功 ✅
 
 ![](../assets/VitePress/1743229486894.png)
+
+## 创建自动部署流程
+
+> [!tip]
+> 这一部份介绍部署到个人的私有服务器，如果是部署到 GitHub Page 请参照官方文档；
+> 另外还有两点：
+> 1. 确保服务器安装了 Nginx，并了解其使用方法；
+> 2. 服务器开启了 SSH 登陆方式；
+
+我们首先将代码提交到 GitHub，然后在页面上选择如下选项：
+
+![](../assets/VitePress/1743236318922.png)
+
+添加如下密钥（密钥名不重要，但是要对应后面 yml 文件里的变量名）：
+
+```txt
+LINK_SERVER_ALI_SSH
+
+HOST
+
+PORT
+
+USER
+```
+
+接着我们进入这个页面创建 Action：
+
+![](../assets/VitePress/1743235224164.png)
+
+将这串代码填入其中：
+
+```yml
+# 构建 VitePress 站点并通过SSH将其部署到阿里云服务器的工作流程
+#
+name: Deploy VitePress site to My Server
+
+on:
+  # 在针对 `main` 分支的推送上运行。如果你
+  # 使用 `master` 分支作为默认分支，请将其更改为 `master`
+  push:
+    branches: [main]
+
+  # 允许你从 Actions 选项卡手动运行此工作流程
+  workflow_dispatch:
+
+# 设置 GITHUB_TOKEN 的权限，以允许部署到 GitHub Pages
+# permissions:
+#   contents: read
+#   pages: write
+#   id-token: write
+
+# 只允许同时进行一次部署，跳过正在运行和最新队列之间的运行队列
+# 但是，不要取消正在进行的运行，因为我们希望允许这些生产部署完成
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # 构建工作
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 如果未启用 lastUpdated，则不需要
+      # - uses: pnpm/action-setup@v3 # 如果使用 pnpm，请取消此区域注释
+      #   with:
+      #     version: 9
+      # - uses: oven-sh/setup-bun@v1 # 如果使用 Bun，请取消注释
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.20.7
+      #     cache: npm # 或 pnpm / yarn
+      # - name: Setup Pages
+      #   uses: actions/configure-pages@v4
+      - name: Install dependencies
+        run: npm ci # 或 pnpm install / yarn install / bun install
+      - name: Build with VitePress
+        run: npm run docs:build # 或 pnpm docs:build / yarn docs:build / bun run docs:build
+      - name: Deploy to Server
+        uses: easingthemes/ssh-deploy@main
+        with:
+          # 本地.ssh文件下的私钥id_rsa，存在secrets的PRIVATE_KEY中
+          SSH_PRIVATE_KEY: ${{ secrets.LINK_SERVER_ALI_SSH }}
+          # 复制操作的参数。"-avzr --delete"意味部署时清空服务器目标目录下的文件
+          ARGS: "-avz --delete"
+          # 源目录
+          SOURCE: ".vitepress/dist/"
+          # 部署目标主机
+          REMOTE_HOST: ${{ secrets.HOST }}
+          # 部署目标主机端口
+          REMOTE_PORT: ${{ secrets.PORT }}
+          # 登录用户
+          REMOTE_USER: ${{ secrets.USER }}
+          # 部署目标目录
+          TARGET: "./temp/dist/"
+          SCRIPT_AFTER: "sudo rsync -av --remove-source-files temp/dist/ nginx/html/vite-press/ && sudo nginx -s reload"
+          
+
+  # 部署工作
+  # deploy:
+  #   environment:
+  #     name: github-pages
+  #     url: ${{ steps.deployment.outputs.page_url }}
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   name: Deploy
+  #   steps:
+  #     - name: Deploy to GitHub Pages
+  #       id: deployment
+  #       uses: actions/deploy-pages@v4
+
+```
+
+需要确保 node 版本与本地一致（我这里是18.20.7），另外请手动在服务器创建好相关目录;
+
+保存文件并提交后会自行出发 Action，如果配置没问题的话就会在 `~/nginx/html/vite-press/` 目录下得到构建好的文件，最后在 Nginx 配置好静态资源访问路径就ok了 🌈
+
 
 ## 维护技巧
 
