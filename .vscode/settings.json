@@ -1,0 +1,7 @@
+{
+    "markdown.copyFiles.destination": {
+        "**/*.md": "${documentWorkspaceFolder}/src/assets/${documentBaseName}/${unixTime}.${fileExtName}"
+    },
+    "markdown.updateLinksOnFileMove.enableForDirectories": true,
+    "markdown.updateLinksOnFileMove.enabled": "always"
+}
